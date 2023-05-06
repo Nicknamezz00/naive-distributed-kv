@@ -25,6 +25,12 @@
 
 package config
 
+import (
+	"fmt"
+	"github.com/BurntSushi/toml"
+	"hash/fnv"
+)
+
 type Config struct {
 	Shards []Shard
 }
@@ -34,4 +40,60 @@ type Shard struct {
 	Name    string
 	Idx     int
 	Address string
+}
+
+type Shards struct {
+	Count  int
+	CurIdx int
+	Addrs  map[int]string
+}
+
+// ParseFile parses the config and return it if success.
+func ParseFile(filename string) (Config, error) {
+	var c Config
+	if _, err := toml.DecodeFile(filename, &c); err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
+// ParseShards converts and verifies a list of shards
+// convert them into a form that can be used for routing.
+func ParseShards(shards []Shard, curShardName string) (*Shards, error) {
+	shardCount := len(shards)
+	shardIdx := -1
+	addrs := make(map[int]string)
+
+	for _, s := range shards {
+		if _, exist := addrs[s.Idx]; exist {
+			return nil, fmt.Errorf("duplicate shard found, index: %d", s.Idx)
+		}
+		addrs[s.Idx] = s.Address
+		if s.Name == curShardName {
+			shardIdx = s.Idx
+		}
+	}
+
+	for i := 0; i < shardCount; i++ {
+		if _, exist := addrs[i]; !exist {
+			return nil, fmt.Errorf("shard with index %d was not found", i)
+		}
+	}
+
+	if shardIdx < 0 {
+		return nil, fmt.Errorf("shard %q was not found", curShardName)
+	}
+
+	return &Shards{
+		Count:  shardCount,
+		CurIdx: shardIdx,
+		Addrs:  addrs,
+	}, nil
+}
+
+// Index returns the hashed index for the corresponding key.
+func (s *Shards) Index(key string) int {
+	h := fnv.New64()
+	h.Write([]byte(key))
+	return int(h.Sum64() % uint64(s.Count))
 }

@@ -27,7 +27,6 @@ package main
 
 import (
 	"flag"
-	"github.com/BurntSushi/toml"
 	"github.com/Nicknamezz00/naive-distributed-kv/api"
 	"github.com/Nicknamezz00/naive-distributed-kv/config"
 	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
@@ -57,32 +56,16 @@ func parseFlags() {
 func main() {
 	parseFlags()
 
-	var cfg config.Config
-	if _, err := toml.DecodeFile(*configFile, &cfg); err != nil {
-		log.Fatalf("toml.DecodeFile(%q): %v", *configFile, err)
+	cfg, err := config.ParseFile(*configFile)
+	if err != nil {
+		log.Fatalf("Error parsing config %q: %v", *configFile, err)
 	}
 
-	var (
-		shardCount int
-		shardIdx   = -1
-	)
-
-	var addrs = make(map[int]string)
-
-	for _, s := range cfg.Shards {
-		addrs[s.Idx] = s.Address
-
-		if s.Idx+1 > shardCount {
-			shardCount = s.Idx + 1
-		}
-		if s.Name == *shard {
-			shardIdx = s.Idx
-		}
+	shards, err := config.ParseShards(cfg.Shards, *shard)
+	if err != nil {
+		log.Fatalf("Error parsing shards config: %v", err)
 	}
-	if shardIdx < 0 {
-		log.Fatalf("Shard %q was not found", *shard)
-	}
-	log.Printf("Shard count is %d, current shard index: %d", shardCount, shardIdx)
+	log.Printf("Shard count is %d, current shard: %d", shards.Count, shards.CurIdx)
 
 	db, closeFunc, err := internalDB.NewDatabase(*dbPath)
 	if err != nil {
@@ -90,7 +73,7 @@ func main() {
 	}
 	defer closeFunc()
 
-	srv := api.NewServer(db, shardIdx, shardCount, addrs)
+	srv := api.NewServer(db, shards)
 
 	http.HandleFunc("/get", srv.GetHandler)
 	http.HandleFunc("/set", srv.SetHandler)
