@@ -74,13 +74,19 @@ func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Error = %v, shard = %d, current shard = %d", err, shard, s.shards.CurIdx)
 }
 
+func (s *Server) DeleteExtraKeysHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Error = %v", s.db.DeleteExtraKeys(func(key string) bool {
+		return s.shards.Index(key) != s.shards.CurIdx
+	}))
+}
+
 func (s *Server) ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, nil)
 }
 
 func (s *Server) redirect(shard int, w http.ResponseWriter, r *http.Request) {
 	url := "http://" + s.shards.Addrs[shard] + r.RequestURI
-	fmt.Fprintf(w, "redirecting from shard %d to shard %d (%q)\n", s.shards.CurIdx, shard, url)
+	fmt.Fprintf(w, "\nredirecting from shard %d to shard %d (%q)\n", s.shards.CurIdx, shard, url)
 
 	resp, err := http.Get(url)
 	if err != nil {
