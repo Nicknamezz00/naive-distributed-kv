@@ -80,5 +80,4 @@ func main() {
 	http.HandleFunc("/delete-extra", srv.DeleteExtraKeysHandler)
 
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
-	//srv.ListenAndServe()
 }
