@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	addr           = flag.String("addr", "localhost:8080", "The HTTP host port for the instance that is benchmarked.")
+	addr           = flag.String("addr", "127.0.0.1:3000", "The HTTP host port for the instance that is benchmarked.")
 	iterations     = flag.Int("iterations", 1000, "The number of iterations for writing")
 	readIterations = flag.Int("read-iterations", 100000, "The number of iterations for reading")
 	concurrency    = flag.Int("concurrency", 1, "How many goroutines to run in parallel when doing writes")
@@ -57,6 +57,8 @@ var httpClient = &http.Client{
 func benchmark(name string, iter int, fn func() string) (qps float64, strs []string) {
 	var max time.Duration
 	var min = time.Hour
+
+	fmt.Printf("Running benchmark(%q, %d)\n", name, iter)
 
 	start := time.Now()
 	for i := 0; i < iter; i++ {
@@ -126,7 +128,6 @@ func benchmarkWrite() (allKeys []string) {
 			totalQPS += qps
 			allKeys = append(allKeys, strs...)
 			mu.Unlock()
-
 			wg.Done()
 		}()
 	}
@@ -150,7 +151,6 @@ func benchmarkRead(allKeys []string) {
 			mu.Lock()
 			totalQPS += qps
 			mu.Unlock()
-
 			wg.Done()
 		}()
 	}

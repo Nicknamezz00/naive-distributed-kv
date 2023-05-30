@@ -26,13 +26,18 @@
 package db_test
 
 import (
-	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
 )
 
-func TestGetSet(t *testing.T) {
+// Read only
+func createTempDB(t *testing.T, readonly bool) *internalDB.Database {
+	t.Helper()
+
 	f, err := ioutil.TempFile(os.TempDir(), "dbtest")
 	if err != nil {
 		t.Fatalf("Cannot create temp db: %v", err)
@@ -40,18 +45,28 @@ func TestGetSet(t *testing.T) {
 
 	name := f.Name()
 	f.Close()
-	defer os.Remove(name)
+	t.Cleanup(func() { os.Remove(name) })
 
-	db, closeFunc, err := internalDB.NewDatabase(name)
+	db, closeFunc, err := internalDB.NewDatabase(name, readonly)
 	if err != nil {
 		t.Fatalf("Cannot create a new database: %v", err)
 	}
-	defer closeFunc()
+	t.Cleanup(func() { closeFunc() })
 
-	setKey(t, db, "Hello", "World")
-	value := getKey(t, db, "Hello")
-	if value != "World" {
-		t.Errorf(`Unexpected value for key "Hello": got %q, want %q`, value, "World")
+	return db
+}
+
+func TestGetSet(t *testing.T) {
+	db := createTempDB(t, false)
+	if err := db.Set("hello", []byte("world")); err != nil {
+		t.Fatalf("Cannot write key: %v", err)
+	}
+	value, err := db.Get("hello")
+	if err != nil {
+		t.Fatalf(`Cannot get key "hello": %v`, err)
+	}
+	if !bytes.Equal(value, []byte("world")) {
+		t.Errorf(`Unexpected value for key "hello": got %q, want %q`, value, "world")
 	}
 }
 
@@ -72,32 +87,52 @@ func getKey(t *testing.T, d *internalDB.Database, key string) string {
 }
 
 func TestDeleteExtraKeys(t *testing.T) {
-	f, err := ioutil.TempFile(os.TempDir(), "dbtest")
-	if err != nil {
-		t.Fatalf("Cannot create temp db: %v", err)
-	}
+	db := createTempDB(t, false)
+	setKey(t, db, "hello", "world")
+	setKey(t, db, "merry", "christmas")
 
-	name := f.Name()
-	f.Close()
-	defer os.Remove(name)
-
-	db, closeFunc, err := internalDB.NewDatabase(name)
-	if err != nil {
-		t.Fatalf("Cannot create a new database: %v", err)
-	}
-	defer closeFunc()
-
-	setKey(t, db, "Hello", "World")
-	setKey(t, db, "Merry", "Christmas")
-	if err := db.DeleteExtraKeys(func(name string) bool { return name == "Merry" }); err != nil {
+	if err := db.DeleteExtraKeys(func(name string) bool { return name == "merry" }); err != nil {
 		t.Fatalf("Cannot delete extra keys: %v", err)
 	}
 
-	if value := getKey(t, db, "Hello"); value != "World" {
-		t.Errorf(`Unexpected value for key "Hello": got %q, want %q`, value, "")
+	if value := getKey(t, db, "hello"); value != "world" {
+		t.Errorf(`Unexpected value for key "hello": got %q, want %q`, value, "")
 	}
 
-	if value := getKey(t, db, "Merry"); value != "" {
-		t.Errorf(`Unexpected value for key "Merry": got %q, want %q`, value, "")
+	if value := getKey(t, db, "merry"); value != "" {
+		t.Errorf(`Unexpected value for key "merry": got %q, want %q`, value, "")
+	}
+}
+
+func TestSetOnReadOnly(t *testing.T) {
+	db := createTempDB(t, true)
+	if err := db.Set("foo", []byte("bar")); err == nil {
+		t.Fatalf("SetOnReadOnly(%q, %q): got nil error, want non-nil error", "foo", []byte("bar"))
+	}
+}
+
+func TestDeleteReplicaKey(t *testing.T) {
+	db := createTempDB(t, false)
+	setKey(t, db, "hello", "world")
+	k, v, err := db.GetOldKey()
+	if err != nil {
+		t.Fatalf(`Unexpected error for GetOldKey(): %v`, err)
+	}
+	if !bytes.Equal(k, []byte("hello")) || !bytes.Equal(v, []byte("world")) {
+		t.Errorf(`GetOldKey() returns unexpected key-value: got %q, %q; want %q, %q`, k, v, "hello", "world")
+	}
+	if err := db.DeleteReplicaKey([]byte("hello"), []byte("foo")); err == nil {
+		t.Fatalf(`DeleteReplicaKey("hello", "foo"): got nil error, want non-nil error`)
+	}
+	if err := db.DeleteReplicaKey([]byte("hello"), []byte("world")); err != nil {
+		t.Fatalf(`DeleteReplicaKey("hello", "world"): got %v, want nil error`, err)
+	}
+	// Now the previous `k` `v` should be deleted, there are not more keys to delete.
+	k, v, err = db.GetOldKey()
+	if err != nil {
+		t.Fatalf(`Unexpected error for GetOldKey(): %v`, err)
+	}
+	if k != nil || v != nil {
+		t.Errorf(`GetOldKey(): got %q, %q; want nil, nil`, k, v)
 	}
 }

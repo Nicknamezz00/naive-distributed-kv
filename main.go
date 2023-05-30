@@ -27,11 +27,14 @@ package main
 
 import (
 	"flag"
+	"log"
+	"net/http"
+
+	internalReplica "github.com/Nicknamezz00/naive-distributed-kv/replica"
+
 	"github.com/Nicknamezz00/naive-distributed-kv/api"
 	"github.com/Nicknamezz00/naive-distributed-kv/config"
 	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
-	"log"
-	"net/http"
 )
 
 var (
@@ -39,6 +42,7 @@ var (
 	httpAddr   = flag.String("http-addr", "127.0.0.1:8080", "HTTP address listening")
 	configFile = flag.String("config", "sharding.toml", "Config for static sharding")
 	shard      = flag.String("shard", "", "The name of the shard for the data")
+	replica    = flag.Bool("replica", false, "Run as a read-only replica or not")
 )
 
 func parseFlags() {
@@ -50,7 +54,6 @@ func parseFlags() {
 	if *shard == "" {
 		log.Fatalf("Must provide shard")
 	}
-
 }
 
 func main() {
@@ -67,17 +70,27 @@ func main() {
 	}
 	log.Printf("Shard count is %d, current shard: %d", shards.Count, shards.CurIdx)
 
-	db, closeFunc, err := internalDB.NewDatabase(*dbPath)
+	db, closeFunc, err := internalDB.NewDatabase(*dbPath, *replica)
 	if err != nil {
 		log.Fatalf("NewDatabase(%q): %v", *dbPath, err)
 	}
 	defer closeFunc()
+
+	if *replica {
+		leader, ok := shards.Addrs[shards.CurIdx]
+		if !ok {
+			log.Fatalf("Cannot find address for leader shard %d", shards.CurIdx)
+		}
+		go internalReplica.ClientLoop(db, leader)
+	}
 
 	srv := api.NewServer(db, shards)
 
 	http.HandleFunc("/get", srv.GetHandler)
 	http.HandleFunc("/set", srv.SetHandler)
 	http.HandleFunc("/delete-extra", srv.DeleteExtraKeysHandler)
+	http.HandleFunc("/delete-replica-key", srv.DeleteReplicaKey)
+	http.HandleFunc("/get-old-key", srv.GetOldKey)
 
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
 }

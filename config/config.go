@@ -27,8 +27,9 @@ package config
 
 import (
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"hash/fnv"
+
+	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
@@ -73,13 +74,11 @@ func ParseShards(shards []Shard, curShardName string) (*Shards, error) {
 			shardIdx = s.Idx
 		}
 	}
-
 	for i := 0; i < shardCount; i++ {
 		if _, exist := addrs[i]; !exist {
 			return nil, fmt.Errorf("shard with index %d was not found", i)
 		}
 	}
-
 	if shardIdx < 0 {
 		return nil, fmt.Errorf("shard %q was not found", curShardName)
 	}

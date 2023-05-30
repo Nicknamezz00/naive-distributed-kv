@@ -36,9 +36,16 @@ sleep 0.2
 
 go install -v
 
-naive-distributed-kv -http-addr=127.0.0.1:8080 -path=./db0.db -shard=Node0 &
-naive-distributed-kv -http-addr=127.0.0.1:8081 -path=./db1.db -shard=Node1 &
-naive-distributed-kv -http-addr=127.0.0.1:8082 -path=./db2.db -shard=Node2 &
-naive-distributed-kv -http-addr=127.0.0.1:8083 -path=./db3.db -shard=Node3 &
+naive-distributed-kv -http-addr=127.0.0.1:3000 -path=./db0.db -shard=Node0 &
+naive-distributed-kv -http-addr=127.0.0.1:3001 -path=./db0-replica.db -shard=Node0 -replica &
+
+naive-distributed-kv -http-addr=127.0.0.1:3100 -path=./db1.db -shard=Node1 &
+naive-distributed-kv -http-addr=127.0.0.1:3101 -path=./db1-replica.db -shard=Node1 -replica &
+
+naive-distributed-kv -http-addr=127.0.0.1:3200 -path=./db2.db -shard=Node2 &
+naive-distributed-kv -http-addr=127.0.0.1:3201 -path=./db2-replica.db -shard=Node2 -replica &
+
+naive-distributed-kv -http-addr=127.0.0.1:3300 -path=./db3.db -shard=Node3 &
+naive-distributed-kv -http-addr=127.0.0.1:3301 -path=./db3-replica.db -shard=Node3 -replica &
 
 wait

@@ -28,9 +28,6 @@ package api_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/Nicknamezz00/naive-distributed-kv/api"
-	"github.com/Nicknamezz00/naive-distributed-kv/config"
-	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -38,6 +35,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Nicknamezz00/naive-distributed-kv/api"
+	"github.com/Nicknamezz00/naive-distributed-kv/config"
+	internalDB "github.com/Nicknamezz00/naive-distributed-kv/db"
 )
 
 func createShardDB(t *testing.T, idx int) *internalDB.Database {
@@ -53,7 +54,7 @@ func createShardDB(t *testing.T, idx int) *internalDB.Database {
 	name := tmpFile.Name()
 	t.Cleanup(func() { os.Remove(name) })
 
-	db, closeFunc, err := internalDB.NewDatabase(name)
+	db, closeFunc, err := internalDB.NewDatabase(name, false)
 	if err != nil {
 		t.Fatalf("Could not create new database %q: %v", name, err)
 	}

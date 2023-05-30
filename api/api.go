@@ -26,11 +26,14 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/Nicknamezz00/naive-distributed-kv/config"
-	"github.com/Nicknamezz00/naive-distributed-kv/db"
 	"io"
 	"net/http"
+
+	"github.com/Nicknamezz00/naive-distributed-kv/config"
+	"github.com/Nicknamezz00/naive-distributed-kv/db"
+	"github.com/Nicknamezz00/naive-distributed-kv/replica"
 )
 
 type Server struct {
@@ -56,7 +59,7 @@ func (s *Server) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	value, err := s.db.Get(key)
-	fmt.Fprintf(w, "Shard = %d, current = %d, addr = %q, Value = %q, error = %v", shard, s.shards.CurIdx, s.shards.Addrs[shard], value, err)
+	fmt.Fprintf(w, "Shard = %d, current = %d, addr = %q, Value = %q, error = %v\n", shard, s.shards.CurIdx, s.shards.Addrs[shard], value, err)
 }
 
 func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
@@ -97,4 +100,26 @@ func (s *Server) redirect(shard int, w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	io.Copy(w, resp.Body)
+}
+
+func (s *Server) GetOldKey(w http.ResponseWriter, r *http.Request) {
+	e := json.NewEncoder(w)
+	k, v, err := s.db.GetOldKey()
+	e.Encode(&replica.NextKeyValue{
+		Key:   string(k),
+		Value: string(v),
+		Err:   err,
+	})
+}
+
+func (s *Server) DeleteReplicaKey(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	key := r.Form.Get("key")
+	value := r.Form.Get("value")
+	if err := s.db.DeleteReplicaKey([]byte(key), []byte(value)); err != nil {
+		w.WriteHeader(http.StatusExpectationFailed)
+		fmt.Fprintf(w, "error: %v", err)
+		return
+	}
+	fmt.Fprintf(w, "ok")
 }
